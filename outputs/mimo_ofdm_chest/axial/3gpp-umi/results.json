@@ -1,0 +1,45 @@
+{
+  "results_schema_version": 1,
+  "scenario_id": "3gpp-umi",
+  "config_fingerprint": "4f774132bba964e4d31fe64a10374b020db5abd5c13a5e564b4e62bf258a4efc",
+  "results": {
+    "AxialTransformerChannelEstimator": {
+      "file": "AxialTransformerChannelEstimator.npz",
+      "estimator_class": "sionna.bench.mimo_ofdm_chest.papers.axial.estimator.AxialTransformerChannelEstimator",
+      "constructor_arguments": {
+        "d_model": 32,
+        "err_var_scale": 1.0,
+        "ffn_expansion": 2,
+        "num_blocks": 2,
+        "num_heads": 4
+      },
+      "assets": [
+        {
+          "asset_type": "axial-channel",
+          "artifact_id": "d32-h4-b2-ffn2-mixed-18cbcdfab060",
+          "manifest_sha256": "c524a8ca325b82364d0ec3ae9382a45d0a3a2c416211855ab86a6bb4dfbd73ce"
+        }
+      ],
+      "updated_at": "2026-11-02 20:24:31"
+    },
+    "AxialTransformerChannelEstimator-12b56": {
+      "file": "AxialTransformerChannelEstimator-12b56.npz",
+      "estimator_class": "sionna.bench.mimo_ofdm_chest.papers.axial.estimator.AxialTransformerChannelEstimator",
+      "constructor_arguments": {
+        "d_model": 32,
+        "err_var_scale": 1.0,
+        "ffn_expansion": 2,
+        "num_blocks": 2,
+        "num_heads": 4
+      },
+      "assets": [
+        {
+          "asset_type": "axial-channel",
+          "artifact_id": "d32-h4-b2-ffn2-mixed-12b56caf5dee",
+          "manifest_sha256": "0505a8dd3ce4f048060116b4db7a9d0bf3c0a87bfcf60db28829789779e2448d"
+        }
+      ],
+      "updated_at": "2026-11-08 11:52:31"
+    }
+  }
+}

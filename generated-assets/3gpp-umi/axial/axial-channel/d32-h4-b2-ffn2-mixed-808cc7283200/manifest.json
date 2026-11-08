@@ -1,0 +1,344 @@
+{
+  "asset_schema_version": 2,
+  "asset_type": "axial-channel",
+  "scenario_id": "3gpp-umi",
+  "artifact_id": "d32-h4-b2-ffn2-mixed-808cc7283200",
+  "compatibility": {
+    "format": "axial-ls-bilinear-residual",
+    "d_model": 32,
+    "ffn_expansion": 2,
+    "num_blocks": 2,
+    "num_heads": 4,
+    "num_effective_subcarriers": 624,
+    "num_ofdm_symbols": 14,
+    "num_pilot_ofdm_symbols": 2,
+    "num_pilot_subcarriers": 156,
+    "num_streams_per_tx": 1,
+    "num_tx": 4,
+    "pilot_layout_sha256": "debd0439b19a81063f0c41074f5a41ead839e82f02c417818deb249240805cd0"
+  },
+  "generation_recipe": {
+    "epochs": 1,
+    "learning_rate": 0.001,
+    "loss": "l1",
+    "optimizer": "adam",
+    "optimizer_batch_size": 4,
+    "patience_epochs": 0,
+    "precision": "single",
+    "relative_min_delta": 0.0,
+    "seed": 42,
+    "snr_db": [
+      5.0
+    ],
+    "train_batch_size": 1,
+    "train_batches": 1,
+    "validation_batch_size": 1,
+    "validation_batches": 1
+  },
+  "files": [
+    {
+      "path": "weights.npz",
+      "size_bytes": 121790,
+      "sha256": "61593e2960744ef17fcd4c5e6d99b2968485fa2f62e5b9c06b54d4d53187bfb9",
+      "format": "npz",
+      "arrays": {
+        "input_conv.weight": {
+          "shape": [
+            32,
+            3,
+            3,
+            3
+          ],
+          "dtype": "float32"
+        },
+        "input_conv.bias": {
+          "shape": [
+            32
+          ],
+          "dtype": "float32"
+        },
+        "pos_projection.weight": {
+          "shape": [
+            32,
+            2
+          ],
+          "dtype": "float32"
+        },
+        "pos_projection.bias": {
+          "shape": [
+            32
+          ],
+          "dtype": "float32"
+        },
+        "blocks.0.time_norm.weight": {
+          "shape": [
+            32
+          ],
+          "dtype": "float32"
+        },
+        "blocks.0.time_norm.bias": {
+          "shape": [
+            32
+          ],
+          "dtype": "float32"
+        },
+        "blocks.0.time_attention.in_proj_weight": {
+          "shape": [
+            96,
+            32
+          ],
+          "dtype": "float32"
+        },
+        "blocks.0.time_attention.in_proj_bias": {
+          "shape": [
+            96
+          ],
+          "dtype": "float32"
+        },
+        "blocks.0.time_attention.out_proj.weight": {
+          "shape": [
+            32,
+            32
+          ],
+          "dtype": "float32"
+        },
+        "blocks.0.time_attention.out_proj.bias": {
+          "shape": [
+            32
+          ],
+          "dtype": "float32"
+        },
+        "blocks.0.freq_norm.weight": {
+          "shape": [
+            32
+          ],
+          "dtype": "float32"
+        },
+        "blocks.0.freq_norm.bias": {
+          "shape": [
+            32
+          ],
+          "dtype": "float32"
+        },
+        "blocks.0.freq_attention.in_proj_weight": {
+          "shape": [
+            96,
+            32
+          ],
+          "dtype": "float32"
+        },
+        "blocks.0.freq_attention.in_proj_bias": {
+          "shape": [
+            96
+          ],
+          "dtype": "float32"
+        },
+        "blocks.0.freq_attention.out_proj.weight": {
+          "shape": [
+            32,
+            32
+          ],
+          "dtype": "float32"
+        },
+        "blocks.0.freq_attention.out_proj.bias": {
+          "shape": [
+            32
+          ],
+          "dtype": "float32"
+        },
+        "blocks.0.ffn_norm.weight": {
+          "shape": [
+            32
+          ],
+          "dtype": "float32"
+        },
+        "blocks.0.ffn_norm.bias": {
+          "shape": [
+            32
+          ],
+          "dtype": "float32"
+        },
+        "blocks.0.ffn.0.weight": {
+          "shape": [
+            64,
+            32,
+            1,
+            1
+          ],
+          "dtype": "float32"
+        },
+        "blocks.0.ffn.0.bias": {
+          "shape": [
+            64
+          ],
+          "dtype": "float32"
+        },
+        "blocks.0.ffn.2.weight": {
+          "shape": [
+            32,
+            64,
+            1,
+            1
+          ],
+          "dtype": "float32"
+        },
+        "blocks.0.ffn.2.bias": {
+          "shape": [
+            32
+          ],
+          "dtype": "float32"
+        },
+        "blocks.1.time_norm.weight": {
+          "shape": [
+            32
+          ],
+          "dtype": "float32"
+        },
+        "blocks.1.time_norm.bias": {
+          "shape": [
+            32
+          ],
+          "dtype": "float32"
+        },
+        "blocks.1.time_attention.in_proj_weight": {
+          "shape": [
+            96,
+            32
+          ],
+          "dtype": "float32"
+        },
+        "blocks.1.time_attention.in_proj_bias": {
+          "shape": [
+            96
+          ],
+          "dtype": "float32"
+        },
+        "blocks.1.time_attention.out_proj.weight": {
+          "shape": [
+            32,
+            32
+          ],
+          "dtype": "float32"
+        },
+        "blocks.1.time_attention.out_proj.bias": {
+          "shape": [
+            32
+          ],
+          "dtype": "float32"
+        },
+        "blocks.1.freq_norm.weight": {
+          "shape": [
+            32
+          ],
+          "dtype": "float32"
+        },
+        "blocks.1.freq_norm.bias": {
+          "shape": [
+            32
+          ],
+          "dtype": "float32"
+        },
+        "blocks.1.freq_attention.in_proj_weight": {
+          "shape": [
+            96,
+            32
+          ],
+          "dtype": "float32"
+        },
+        "blocks.1.freq_attention.in_proj_bias": {
+          "shape": [
+            96
+          ],
+          "dtype": "float32"
+        },
+        "blocks.1.freq_attention.out_proj.weight": {
+          "shape": [
+            32,
+            32
+          ],
+          "dtype": "float32"
+        },
+        "blocks.1.freq_attention.out_proj.bias": {
+          "shape": [
+            32
+          ],
+          "dtype": "float32"
+        },
+        "blocks.1.ffn_norm.weight": {
+          "shape": [
+            32
+          ],
+          "dtype": "float32"
+        },
+        "blocks.1.ffn_norm.bias": {
+          "shape": [
+            32
+          ],
+          "dtype": "float32"
+        },
+        "blocks.1.ffn.0.weight": {
+          "shape": [
+            64,
+            32,
+            1,
+            1
+          ],
+          "dtype": "float32"
+        },
+        "blocks.1.ffn.0.bias": {
+          "shape": [
+            64
+          ],
+          "dtype": "float32"
+        },
+        "blocks.1.ffn.2.weight": {
+          "shape": [
+            32,
+            64,
+            1,
+            1
+          ],
+          "dtype": "float32"
+        },
+        "blocks.1.ffn.2.bias": {
+          "shape": [
+            32
+          ],
+          "dtype": "float32"
+        },
+        "output_norm.weight": {
+          "shape": [
+            32
+          ],
+          "dtype": "float32"
+        },
+        "output_norm.bias": {
+          "shape": [
+            32
+          ],
+          "dtype": "float32"
+        },
+        "output_conv.weight": {
+          "shape": [
+            2,
+            32,
+            3,
+            3
+          ],
+          "dtype": "float32"
+        },
+        "output_conv.bias": {
+          "shape": [
+            2
+          ],
+          "dtype": "float32"
+        }
+      }
+    }
+  ],
+  "metadata": {
+    "best_epoch": 1,
+    "best_val_l1": 0.0915991037319868,
+    "elapsed_seconds": 10.221548080444336
+  }
+}

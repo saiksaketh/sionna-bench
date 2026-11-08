@@ -1,0 +1,7 @@
+{
+  "status": "finished",
+  "best_epoch": 37,
+  "best_val_nmse": 0.01832475431690617,
+  "elapsed_seconds": 9920.494317293167,
+  "asset_dir": "generated-assets/3gpp-umi/axial/axial-channel/d32-h4-b2-ffn2-mixed-12b56caf5dee"
+}
