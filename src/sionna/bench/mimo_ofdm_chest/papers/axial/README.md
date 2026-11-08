@@ -53,3 +53,28 @@ BER, and BLER.
 
 Architecture flags are `--d-model` (32), `--num-heads` (4), `--num-blocks` (2),
 and `--ffn-expansion` (2).
+
+## Finetune the high-SNR residual
+
+`--equal-snr-loss` normalizes each SNR's NMSE before averaging, and clips
+gradients at 1. `--anchor-pilots` copies the least-squares observation back
+onto every pilot resource element. `--init-from` loads `best.pt` from an
+earlier run and starts a new artifact; evaluation must repeat the same flags.
+
+```bash
+python -m sionna.bench.mimo_ofdm_chest.papers.axial.run_benchmark \
+    --prepare-assets \
+    --asset-root generated-assets \
+    --device cuda:3 \
+    --epochs 20 \
+    --train-batches 64 \
+    --train-batch-size 4 \
+    --validation-batches 8 \
+    --validation-batch-size 4 \
+    --optimizer-batch-size 4 \
+    --patience-epochs 8 \
+    --learning-rate 1e-4 \
+    --equal-snr-loss \
+    --anchor-pilots \
+    --init-from generated-assets/3gpp-umi/axial/axial-channel/d32-h4-b2-ffn2-mixed-12b56caf5dee-run/best.pt
+```

@@ -34,6 +34,7 @@ __all__ = [
     "PilotImageIndex",
     "build_axial_channel_net",
     "examples_from_channel",
+    "restore_pilot_observations",
 ]
 
 
@@ -195,6 +196,46 @@ class AxialTransformerChannelNet(torch.nn.Module):
             features = block(features)
         features = self.output_norm(features).permute(0, 3, 1, 2)
         return upsampled + self.output_conv(features)
+
+
+def restore_pilot_observations(
+    full_grid: torch.Tensor,
+    pilots: torch.Tensor,
+    subcarrier_image: torch.Tensor,
+    symbol_image: torch.Tensor,
+    *,
+    groups_outer: bool,
+) -> torch.Tensor:
+    """Copy observed pilot values back onto their resource elements.
+
+    The axial residual is free on data resource elements. Pilot resource
+    elements keep the least-squares observation, so the residual cannot
+    change a resource element the estimator has already observed.
+
+    ``full_grid`` and ``pilots`` are ``[examples, 2, ...]``. Training
+    concatenates transmit-stream groups as the outer axis. Inference flattens
+    the group axis as the inner axis. ``subcarrier_image`` and
+    ``symbol_image`` have shape ``[groups, pilot_subcarriers, pilot_symbols]``.
+    """
+    groups = int(subcarrier_image.shape[0])
+    if full_grid.shape[0] % groups != 0 or pilots.shape[0] != full_grid.shape[0]:
+        raise ValueError("Pilot observations do not match the full-grid batch.")
+    per_group = full_grid.shape[0] // groups
+    restored = full_grid.clone()
+    if groups_outer:
+        grid = restored.reshape(groups, per_group, *full_grid.shape[1:])
+        observed = pilots.reshape(groups, per_group, *pilots.shape[1:])
+    else:
+        grid = restored.reshape(per_group, groups, *full_grid.shape[1:])
+        observed = pilots.reshape(per_group, groups, *pilots.shape[1:])
+    for group in range(groups):
+        subcarriers = subcarrier_image[group, :, 0].to(device=full_grid.device, dtype=torch.long)
+        symbols = symbol_image[group, 0, :].to(device=full_grid.device, dtype=torch.long)
+        if groups_outer:
+            grid[group, :, :, subcarriers[:, None], symbols[None, :]] = observed[group]
+        else:
+            grid[:, group, :, subcarriers[:, None], symbols[None, :]] = observed[:, group]
+    return restored
 
 
 def build_axial_channel_net(
@@ -399,6 +440,8 @@ class AxialTransformerChannelEstimator(BaseChannelEstimator, _PilotGroupMixin):
     :param num_blocks: Number of axial blocks.
     :param ffn_expansion: Feed-forward width multiplier.
     :param err_var_scale: Nonnegative scale on the detector-facing error variance.
+    :param anchor_pilots: Copy least-squares pilot observations onto the
+        estimated grid before returning it.
     :param precision: Sionna precision. If `None`, the global precision is used.
     :param device: Torch device. If `None`, the global Sionna device is used.
     """
@@ -414,6 +457,7 @@ class AxialTransformerChannelEstimator(BaseChannelEstimator, _PilotGroupMixin):
         num_blocks: int = DEFAULT_NUM_BLOCKS,
         ffn_expansion: int = DEFAULT_FFN_EXPANSION,
         err_var_scale: float = DEFAULT_ERR_VAR_SCALE,
+        anchor_pilots: bool = False,
         precision: Optional[Precision] = None,
         device: Optional[str] = None,
     ) -> None:
@@ -431,6 +475,7 @@ class AxialTransformerChannelEstimator(BaseChannelEstimator, _PilotGroupMixin):
         self._num_blocks = int(num_blocks)
         self._ffn_expansion = int(ffn_expansion)
         self._err_var_scale = float(err_var_scale)
+        self._anchor_pilots = bool(anchor_pilots)
         initialize_pilot_image(self, resource_grid)
         self._models = torch.nn.ModuleList(
             self._build_model(state) for state in model_states
@@ -547,6 +592,14 @@ class AxialTransformerChannelEstimator(BaseChannelEstimator, _PilotGroupMixin):
             model = self._models[self._select_model_index(no)]
         with torch.no_grad():
             model_outputs = model(model_inputs, no)
+        if self._anchor_pilots:
+            model_outputs = restore_pilot_observations(
+                model_outputs,
+                model_inputs,
+                self._group_subcarrier_image,
+                self._group_symbol_image,
+                groups_outer=False,
+            )
         full_images = torch.complex(
             model_outputs[:, 0].to(dtype=self.dtype),
             model_outputs[:, 1].to(dtype=self.dtype),

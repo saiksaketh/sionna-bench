@@ -12,6 +12,7 @@ from sionna.bench.mimo_ofdm_chest.papers.axial.asset import load_model, train_mo
 from sionna.bench.mimo_ofdm_chest.papers.axial.estimator import (
     AxialTransformerChannelEstimator,
     AxialTransformerChannelNet,
+    restore_pilot_observations,
 )
 from test.mimo_ofdm_chest.system_variants import (
     assert_compiled_estimator_matches_eager,
@@ -33,6 +34,28 @@ def _state(resource_grid, **architecture) -> dict[str, torch.Tensor]:
 
 def _architecture() -> dict[str, int]:
     return {"d_model": 8, "num_heads": 2, "num_blocks": 1, "ffn_expansion": 2}
+
+
+def test_pilot_anchor_restores_observed_resource_elements() -> None:
+    """Pilot resource elements keep the observation for both batch layouts."""
+    subcarriers = torch.tensor([[[1, 1], [4, 4]], [[0, 0], [3, 3]]])
+    symbols = torch.tensor([[[2, 6], [2, 6]], [[2, 6], [2, 6]]])
+    full = torch.zeros(4, 2, 6, 8)
+    pilots = torch.arange(1, 4 * 2 * 2 * 2 + 1, dtype=torch.float32).reshape(4, 2, 2, 2)
+
+    outer = restore_pilot_observations(
+        full, pilots, subcarriers, symbols, groups_outer=True
+    )
+    inner = restore_pilot_observations(
+        full, pilots, subcarriers, symbols, groups_outer=False
+    )
+
+    torch.testing.assert_close(outer[0, :, 1, 2], pilots[0, :, 0, 0])
+    torch.testing.assert_close(outer[3, :, 3, 6], pilots[3, :, 1, 1])
+    torch.testing.assert_close(inner[1, :, 0, 2], pilots[1, :, 0, 0])
+    torch.testing.assert_close(inner[2, :, 4, 6], pilots[2, :, 1, 1])
+    assert torch.count_nonzero(outer) == pilots.numel()
+    assert torch.count_nonzero(inner) == pilots.numel()
 
 
 def test_untrained_network_matches_bilinear_pilot_image() -> None:

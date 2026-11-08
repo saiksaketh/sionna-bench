@@ -49,6 +49,7 @@ _RECORDED_ARGUMENTS = (
     "num_blocks",
     "ffn_expansion",
     "err_var_scale",
+    "anchor_pilots",
 )
 
 
@@ -97,7 +98,11 @@ def run_benchmark(
     constructor_arguments = resolve_constructor_arguments(
         AxialTransformerChannelEstimator,
         _RECORDED_ARGUMENTS,
-        {**architecture, "err_var_scale": err_var_scale},
+        {
+            **architecture,
+            "err_var_scale": err_var_scale,
+            "anchor_pilots": bool(settings["anchor_pilots"]),
+        },
     )
     resource_grid = build_resource_grid(cfg)
     model_states, model_noise_variances, manifest_paths = load_model(
@@ -114,6 +119,7 @@ def run_benchmark(
     estimator_kwargs = {
         "model_states": model_states,
         "err_var_scale": err_var_scale,
+        "anchor_pilots": bool(settings["anchor_pilots"]),
         **architecture,
     }
     if model_noise_variances is not None:
@@ -166,6 +172,22 @@ def _parse_args() -> argparse.Namespace:
     assets.add_argument("--patience-epochs", type=int, default=None)
     assets.add_argument("--relative-min-delta", type=float, default=None)
     assets.add_argument("--model-seed", type=int, default=None)
+    assets.add_argument(
+        "--equal-snr-loss",
+        action="store_true",
+        help="Give every SNR the same normalized NMSE weight and clip gradients.",
+    )
+    assets.add_argument(
+        "--anchor-pilots",
+        action="store_true",
+        help="Keep least-squares values on the pilot resource elements.",
+    )
+    assets.add_argument(
+        "--init-from",
+        type=Path,
+        default=None,
+        help="Finetune from a best.pt or latest.pt checkpoint instead of random weights.",
+    )
     assets.add_argument("--snr-specific-weights", action="store_true")
     assets.add_argument("--training-snr-db", type=float, action="append", default=None)
 
@@ -212,6 +234,9 @@ def _settings_from_args(args: argparse.Namespace) -> dict[str, Any]:
         )
     }
     settings["snr_specific_weights"] = bool(args.snr_specific_weights)
+    settings["equal_snr_loss"] = bool(args.equal_snr_loss)
+    settings["anchor_pilots"] = bool(args.anchor_pilots)
+    settings["init_from"] = args.init_from
     return settings
 
 

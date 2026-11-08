@@ -37,6 +37,7 @@ from .estimator import (
     PilotImageIndex,
     build_axial_channel_net,
     examples_from_channel,
+    restore_pilot_observations,
 )
 
 
@@ -50,6 +51,7 @@ CANONICAL_OPTIMIZER_BATCH_SIZE = 4
 CANONICAL_LEARNING_RATE = 1e-3
 CANONICAL_PATIENCE_EPOCHS = 3
 CANONICAL_RELATIVE_MIN_DELTA = 1e-4
+EQUAL_SNR_GRAD_CLIP = 1.0
 
 __all__ = [
     "load_model",
@@ -106,6 +108,9 @@ def load_model(
     num_heads: int = DEFAULT_NUM_HEADS,
     num_blocks: int = DEFAULT_NUM_BLOCKS,
     ffn_expansion: int = DEFAULT_FFN_EXPANSION,
+    equal_snr_loss: bool = False,
+    anchor_pilots: bool = False,
+    init_from: Optional[Union[str, Path]] = None,
     seed: int = 42,
     asset_root: Optional[Union[str, Path]] = None,
 ) -> tuple[list[dict[str, torch.Tensor]], Optional[torch.Tensor], list[Path]]:
@@ -132,6 +137,9 @@ def load_model(
         num_heads=num_heads,
         num_blocks=num_blocks,
         ffn_expansion=ffn_expansion,
+        equal_snr_loss=equal_snr_loss,
+        anchor_pilots=anchor_pilots,
+        init_from=init_from,
         seed=seed,
         asset_root=asset_root,
     )
@@ -163,6 +171,9 @@ def train_model(
     num_heads: int = DEFAULT_NUM_HEADS,
     num_blocks: int = DEFAULT_NUM_BLOCKS,
     ffn_expansion: int = DEFAULT_FFN_EXPANSION,
+    equal_snr_loss: bool = False,
+    anchor_pilots: bool = False,
+    init_from: Optional[Union[str, Path]] = None,
     seed: int = 42,
     asset_root: Union[str, Path],
     overwrite: bool = False,
@@ -202,6 +213,9 @@ def train_model(
         num_heads=num_heads,
         num_blocks=num_blocks,
         ffn_expansion=ffn_expansion,
+        equal_snr_loss=equal_snr_loss,
+        anchor_pilots=anchor_pilots,
+        init_from=init_from,
         seed=seed,
         asset_root=asset_root,
     )
@@ -230,6 +244,7 @@ def train_model(
             seed=seed,
             overwrite=overwrite,
             resume=resume,
+            init_from=None if init_from is None else Path(init_from),
         )
     return load_model(
         resource_grid,
@@ -249,6 +264,9 @@ def train_model(
         num_heads=num_heads,
         num_blocks=num_blocks,
         ffn_expansion=ffn_expansion,
+        equal_snr_loss=equal_snr_loss,
+        anchor_pilots=anchor_pilots,
+        init_from=init_from,
         seed=seed,
         asset_root=asset_root,
     )
@@ -277,11 +295,14 @@ def _recipe(
     snr_dbs: list[float],
     seed: int,
     precision: str,
+    equal_snr_loss: bool = False,
+    pilot_anchor: bool = False,
+    init_from: Optional[str] = None,
 ) -> dict[str, Any]:
-    return {
+    recipe = {
         "epochs": int(epochs),
         "learning_rate": float(learning_rate),
-        "loss": "nmse",
+        "loss": "nmse-equal-snr" if equal_snr_loss else "nmse",
         "optimizer": "adam",
         "optimizer_batch_size": int(optimizer_batch_size),
         "patience_epochs": int(patience_epochs),
@@ -294,6 +315,21 @@ def _recipe(
         "validation_batch_size": int(validation_batch_size),
         "validation_batches": int(validation_batches),
     }
+    if pilot_anchor:
+        recipe["pilot_anchor"] = True
+    if init_from is not None:
+        recipe["init_from"] = init_from
+    if equal_snr_loss:
+        recipe["grad_clip"] = EQUAL_SNR_GRAD_CLIP
+    return recipe
+
+
+def _init_token(path: Union[str, Path]) -> str:
+    """Identify a finetune source without putting a machine path in the recipe."""
+    checkpoint = Path(path).expanduser().resolve()
+    if not checkpoint.is_file():
+        raise FileNotFoundError(f"Axial init checkpoint was not found at {checkpoint}.")
+    return f"{checkpoint.parent.name}/{checkpoint.name}"
 
 
 def _artifact_id(architecture: dict[str, int], mode: str, recipe: dict[str, Any]) -> str:
@@ -329,6 +365,9 @@ def _model_contexts(
     num_heads: int,
     num_blocks: int,
     ffn_expansion: int,
+    equal_snr_loss: bool,
+    anchor_pilots: bool,
+    init_from: Optional[Union[str, Path]],
     seed: int,
     asset_root: Optional[Union[str, Path]],
 ) -> tuple[list[dict[str, Any]], Optional[torch.Tensor]]:
@@ -377,6 +416,9 @@ def _model_contexts(
             snr_dbs=group,
             seed=seed,
             precision=cfg.precision,
+            equal_snr_loss=equal_snr_loss,
+            pilot_anchor=anchor_pilots,
+            init_from=None if init_from is None else _init_token(init_from),
         )
         artifact_id = _artifact_id(architecture, mode, recipe)
         if asset_root is None:
@@ -396,6 +438,9 @@ def _model_contexts(
             "recipe": recipe,
             "snr_dbs": group,
             "architecture": architecture,
+            "equal_snr_loss": bool(equal_snr_loss),
+            "anchor_pilots": bool(anchor_pilots),
+            "init_from": None if init_from is None else Path(init_from).expanduser().resolve(),
         }
 
     contexts = [context_for(group) for group in groups]
@@ -610,6 +655,8 @@ def _run_epoch(
     optimizer_batch_size: int,
     seed: int,
     optimizer: Optional[torch.optim.Optimizer],
+    equal_snr_loss: bool = False,
+    anchor_pilots: bool = False,
 ) -> tuple[float, float]:
     """Return epoch NMSE and mean L1."""
     training = optimizer is not None
@@ -619,6 +666,10 @@ def _run_epoch(
     absolute_error_sum = 0.0
     value_count = 0
     device = torch.device(cfg.device)
+    snr_count = len(set(float(snr) for snr in snr_dbs))
+    seen_snrs: set[float] = set()
+    if training and equal_snr_loss:
+        optimizer.zero_grad(set_to_none=True)
     for batch_index in range(num_batches):
         snr_db = snr_dbs[batch_index % len(snr_dbs)]
         frequency_response = _sample_channel(
@@ -634,22 +685,47 @@ def _run_epoch(
         generator.manual_seed(seed + 100003 * (batch_index + 1))
         pilots = _add_pilot_noise(pilots, powers, noise_variance, generator)
         noise_tensor = torch.tensor(noise_variance, dtype=torch.float32, device=device)
+        chunk_count = max(
+            1,
+            (int(pilots.shape[0]) + int(optimizer_batch_size) - 1) // int(optimizer_batch_size),
+        )
         for start in range(0, int(pilots.shape[0]), optimizer_batch_size):
             stop = start + optimizer_batch_size
             pilot_batch = pilots[start:stop].to(device=device, dtype=torch.float32)
             target_batch = targets[start:stop].to(device=device, dtype=torch.float32)
             if training:
-                optimizer.zero_grad(set_to_none=True)
+                if not equal_snr_loss:
+                    optimizer.zero_grad(set_to_none=True)
                 prediction = model(pilot_batch, noise_tensor)
+                if anchor_pilots:
+                    prediction = restore_pilot_observations(
+                        prediction,
+                        pilot_batch,
+                        layout._group_subcarrier_image,
+                        layout._group_symbol_image,
+                        groups_outer=True,
+                    )
                 squared_error, power, absolute_error = _channel_errors(
                     prediction, target_batch
                 )
                 loss = squared_error.sum() / power.sum().clamp_min(1e-12)
+                if equal_snr_loss:
+                    loss = loss / loss.detach().clamp_min(1e-6)
+                    loss = loss / float(snr_count * chunk_count)
                 loss.backward()
-                optimizer.step()
+                if not equal_snr_loss:
+                    optimizer.step()
             else:
                 with torch.no_grad():
                     prediction = model(pilot_batch, noise_tensor)
+                    if anchor_pilots:
+                        prediction = restore_pilot_observations(
+                            prediction,
+                            pilot_batch,
+                            layout._group_subcarrier_image,
+                            layout._group_symbol_image,
+                            groups_outer=True,
+                        )
                     squared_error, power, absolute_error = _channel_errors(
                         prediction, target_batch
                     )
@@ -657,6 +733,15 @@ def _run_epoch(
             power_sum += float(power.detach().sum().item())
             absolute_error_sum += float(absolute_error.detach().sum().item())
             value_count += int(target_batch.numel())
+        if training and equal_snr_loss:
+            seen_snrs.add(float(snr_db))
+            cycle_complete = seen_snrs == set(float(snr) for snr in snr_dbs)
+            epoch_done = batch_index + 1 == num_batches
+            if cycle_complete or epoch_done:
+                torch.nn.utils.clip_grad_norm_(model.parameters(), EQUAL_SNR_GRAD_CLIP)
+                optimizer.step()
+                optimizer.zero_grad(set_to_none=True)
+                seen_snrs.clear()
     nmse = squared_error_sum / max(power_sum, 1e-12)
     mean_l1 = absolute_error_sum / max(value_count, 1)
     return nmse, mean_l1
@@ -676,6 +761,7 @@ def _train_context(
     seed: int,
     overwrite: bool,
     resume: bool,
+    init_from: Optional[Path],
 ) -> None:
     device = torch.device(cfg.device)
     architecture = context["architecture"]
@@ -690,6 +776,13 @@ def _train_context(
             num_blocks=architecture["num_blocks"],
             ffn_expansion=architecture["ffn_expansion"],
         ).to(device=device)
+    if init_from is not None and resume:
+        raise ValueError("Pass either `resume` or `init_from`, not both.")
+    if init_from is not None:
+        payload = torch.load(init_from, map_location=device, weights_only=False)
+        source = payload["best_model"] if "best_model" in payload else payload["model"]
+        model.load_state_dict(source)
+        print(f"[axial] initialized weights from {init_from}")
     optimizer = torch.optim.Adam(model.parameters(), lr=float(learning_rate))
     channel_source = UMiChannelSource(cfg, resource_grid)
     sampler = GenerateOFDMChannel(
@@ -750,6 +843,8 @@ def _train_context(
             optimizer_batch_size=int(optimizer_batch_size),
             seed=epoch_seed,
             optimizer=optimizer,
+            equal_snr_loss=bool(context["equal_snr_loss"]),
+            anchor_pilots=bool(context["anchor_pilots"]),
         )
         val_nmse, val_l1 = _run_epoch(
             model,
@@ -764,6 +859,7 @@ def _train_context(
             optimizer_batch_size=int(optimizer_batch_size),
             seed=seed + 500000,
             optimizer=None,
+            anchor_pilots=bool(context["anchor_pilots"]),
         )
         improved = val_nmse < best_val * (1.0 - float(relative_min_delta))
         model_state = {
